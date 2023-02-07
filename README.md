@@ -54,6 +54,8 @@ jobs:
     steps:
       - name: Verify and update version
         uses: colinparsonsme/verify-and-update-version@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
 ## License

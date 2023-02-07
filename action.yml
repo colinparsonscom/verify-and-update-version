@@ -7,6 +7,11 @@ branding:
   icon: tag
   color: blue
 
+inputs:
+  github-token:
+    description: GitHub token for the workflow. Just pass in ${{ secrets.GITHUB_TOKEN }}.
+    required: true
+
 runs:
   using: composite
 
@@ -22,7 +27,7 @@ runs:
       # https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#get-the-latest-release
       id: latest
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
         res=$( \
           gh api \
@@ -121,7 +126,7 @@ runs:
       # If tag doesn't exist remotely, we still want to exit without failing
       # Hence the || true
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
         gh api \
         -X DELETE \

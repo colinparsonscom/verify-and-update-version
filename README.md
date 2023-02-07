@@ -36,14 +36,14 @@ See [action.yml](action.yml).
 ## Example Workflow
 
 ```yaml
-name: Update my version
+name: Verify and update my version
 
 on:
   release:
     types: [released]
 
 jobs:
-  publish:
+  verify-and-update:
     runs-on: ubuntu-latest
 
     # You have to grant content:write permissions to this job in order to update
@@ -52,8 +52,8 @@ jobs:
       contents: write
 
     steps:
-      - name: Update version
-        uses: colinparsonsme/update-version@v1
+      - name: Verify and update version
+        uses: colinparsonsme/verify-and-update-version@v1
 ```
 
 ## License

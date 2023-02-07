@@ -30,7 +30,7 @@ runs:
           -H "Accept: application/vnd.github+json" \
           repos/${{ github.repository }}/releases/latest \
         )
-        release = $(echo $res | jq -r '.tag_name')
+        release=$(echo $res | jq -r '.tag_name')
         echo "release=$release" >> $GITHUB_OUTPUT
 
     - name: Check whether we want to run this action

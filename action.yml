@@ -1,0 +1,134 @@
+name: Update version
+author: Colin Parsons
+description:
+  Verify the version tag and release have the same name, and update the major
+  version tag, when there's a new latest release.
+branding:
+  icon: tag
+  color: blue
+
+runs:
+  using: composite
+
+  # it's also annoying that we can't set the default shell for a composite
+  # action, so we have to set shell: bash for every step
+  # https://github.com/orgs/community/discussions/46670
+
+  steps:
+    - name: Get latest release
+      shell: bash
+      # we want to get the latest release, to see if the release that triggered
+      # this action is the latest release
+      # https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#get-the-latest-release
+      id: latest
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        res=$( \
+          gh api \
+          -X GET \
+          -H "Accept: application/vnd.github+json" \
+          repos/${{ github.repository }}/releases/latest \
+        )
+        release = $(echo $res | jq -r '.tag_name')
+        echo "release=$release" >> $GITHUB_OUTPUT
+
+    - name: Check whether we want to run this action
+      shell: bash
+      # since we can't just manually exit the action if a check fails, we have
+      # to create this big step instead of run 3 separate check steps
+      # https://github.com/actions/runner/issues/662
+
+      # we won't run this action if it's a prerelease, a draft, or not the
+      # latest release
+      id: check
+      run: |
+        if [[ ${{ github.event.release.prerelease }} ]]; then
+          echo "This is a prerelease, so we won't update the major version tag"
+          echo "run-action=false" >> $GITHUB_OUTPUT
+        elif [[ ${{ github.event.release.draft }} ]]; then
+          echo "This is a draft, so we won't update the major version tag"
+          echo "run-action=false" >> $GITHUB_OUTPUT
+        elif [[ ${{ github.event.release.tag_name }} != ${{ steps.latest.outputs.release }} ]]; then
+          echo "This isn't the latest release, so we won't update the major version tag"
+          echo "run-action=false" >> $GITHUB_OUTPUT
+        else
+          echo "run-action=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Throw an error if the tag name doesn't equal the release name
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      run: |
+        if [[ ${{ github.event.release.tag_name }} != ${{ github.event.release.name }} ]]; then
+          echo "Tag name (${{ github.event.release.tag_name }}) and release name (${{ github.event.release.name }}) must be the same"
+          exit 1
+        fi
+
+    - name: Throw an error if the release name isn't semver in the format v1.2.3
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      # note GitHub generally wants versions prefixed with v; see
+      # https://docs.github.com/en/actions/creating-actions/about-custom-actions#using-tags-for-release-management
+      run: |
+        if [[ ! ${{ github.event.release.name }} =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Release name (${{ github.event.release.name }}) must be semver, in the format v1.2.3"
+          echo "Note GitHub generally wants version prefixed with v; see"
+          echo "https://docs.github.com/en/actions/creating-actions/about-custom-actions#using-tags-for-release-management"
+          exit 1
+        fi
+
+    - name: Checkout
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      uses: actions/checkout@v3
+
+    - name: Set up git
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      run: |
+        git config user.email "tagmajorversionbot@example.com"
+        git config user.name "Tag Major Version Bot"
+
+    - name: Get the major version of the release
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      id: version
+      # Release name will be something like v1.2.3, and we want to get v1
+      # We just remove everything after the first period
+      # https://stackoverflow.com/questions/4168371/how-can-i-remove-all-text-after-a-character-in-bash
+      run: |
+        MAJOR=$(echo ${{ github.event.release.name }} | cut -f1 -d".")
+        echo "major=$MAJOR" >> $GITHUB_OUTPUT
+
+    - name: Delete the old tag locally
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      # If tag doesn't exist locally, we still want to exit without failing
+      run: git tag -d ${{ steps.version.outputs.major }} || true
+
+    - name: Create a new tag for the major version
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      run:
+        git tag -a ${{ steps.version.outputs.major }} -m "Major version ${{
+        steps.version.outputs.major }}"
+
+    - name: Delete the old tag remotely
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      # https://docs.github.com/en/rest/git/refs?apiVersion=2022-11-28#delete-a-reference
+      # If tag doesn't exist remotely, we still want to exit without failing
+      # Hence the || true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh api \
+        -X DELETE \
+        -H "Accept: application/vnd.github+json" \
+        repos/${{ github.repository }}/git/refs/tags/${{ steps.version.outputs.major }} || true
+
+    - name: Push a new tag remotely
+      if: ${{ steps.check.outputs.run-action }}
+      shell: bash
+      run: git push -u origin ${{ steps.version.outputs.major }}

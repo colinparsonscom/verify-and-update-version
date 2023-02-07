@@ -1,4 +1,4 @@
-name: Update version
+name: Verify and update version
 author: Colin Parsons
 description:
   Verify the version tag and release have the same name, and update the major

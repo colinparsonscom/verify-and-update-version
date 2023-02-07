@@ -1,4 +1,4 @@
-# update-version
+# verify-and-update-version
 
 GitHub action to verify the version tag and release have the same name, and
 update the major version tag, when there's a new latest release.

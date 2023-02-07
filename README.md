@@ -43,7 +43,7 @@ on:
     types: [released]
 
 jobs:
-  verify-and-update:
+  verify-and-update-version:
     runs-on: ubuntu-latest
 
     # You have to grant content:write permissions to this job in order to update

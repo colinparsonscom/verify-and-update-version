@@ -33,27 +33,23 @@ runs:
         release=$(echo $res | jq -r '.tag_name')
         echo "release=$release" >> $GITHUB_OUTPUT
 
-    - name: Check whether we want to run this action
+    - name: Check whether this release is the latest release
       shell: bash
-      # since we can't just manually exit the action if a check fails, we have
-      # to create this big step instead of run 2 separate check steps
+      # since we can't just manually exit the action without failing if a
+      # particular step fails, we have to feed this step as input to all
+      # following steps
       # https://github.com/actions/runner/issues/662
-
-      # we won't run this action if it's a draft or not the latest release
-      id: check
+      id: check-release
       run: |
-        if [[ ${{ github.event.release.draft }} == true ]]; then
-          echo "This is a draft, so we won't update the major version tag"
-          echo "run-action=false" >> $GITHUB_OUTPUT
-        elif [[ ${{ github.event.release.tag_name }} != ${{ steps.latest.outputs.release }} ]]; then
+        if [[ ${{ github.event.release.tag_name }} != ${{ steps.latest.outputs.release }} ]]; then
           echo "This isn't the latest release, so we won't update the major version tag"
-          echo "run-action=false" >> $GITHUB_OUTPUT
+          echo "is-latest-release=false" >> $GITHUB_OUTPUT
         else
-          echo "run-action=true" >> $GITHUB_OUTPUT
+          echo "is-latest-release=true" >> $GITHUB_OUTPUT
         fi
 
     - name: Throw an error if the tag name doesn't equal the release name
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release }}
       shell: bash
       run: |
         if [[ ${{ github.event.release.tag_name }} != ${{ github.event.release.name }} ]]; then
@@ -62,7 +58,7 @@ runs:
         fi
 
     - name: Throw an error if the release name isn't semver in the format v1.2.3
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release }}
       shell: bash
       # note GitHub generally wants versions prefixed with v; see
       # https://docs.github.com/en/actions/creating-actions/about-custom-actions#using-tags-for-release-management
@@ -75,23 +71,23 @@ runs:
         fi
 
     - name: Checkout
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release }}
       uses: actions/checkout@v3
 
     - name: Set up git
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release }}
       shell: bash
       run: |
         git config user.email "tagmajorversionbot@example.com"
         git config user.name "Tag Major Version Bot"
 
     - name: Get the major version of the release
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release }}
       shell: bash
-      id: version
       # Release name will be something like v1.2.3, and we want to get v1
       # We just remove everything after the first period
       # https://stackoverflow.com/questions/4168371/how-can-i-remove-all-text-after-a-character-in-bash
+      id: version
       run: |
         MAJOR=$(echo ${{ github.event.release.name }} | cut -f1 -d".")
         echo "major=$MAJOR" >> $GITHUB_OUTPUT

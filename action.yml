@@ -43,10 +43,10 @@ runs:
       # latest release
       id: check
       run: |
-        if [[ ${{ github.event.release.prerelease }} ]]; then
+        if [[ ${{ github.event.release.prerelease }} == true ]]; then
           echo "This is a prerelease, so we won't update the major version tag"
           echo "run-action=false" >> $GITHUB_OUTPUT
-        elif [[ ${{ github.event.release.draft }} ]]; then
+        elif [[ ${{ github.event.release.draft }} == true ]]; then
           echo "This is a draft, so we won't update the major version tag"
           echo "run-action=false" >> $GITHUB_OUTPUT
         elif [[ ${{ github.event.release.tag_name }} != ${{ steps.latest.outputs.release }} ]]; then

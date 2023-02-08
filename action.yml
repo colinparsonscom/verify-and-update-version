@@ -49,7 +49,7 @@ runs:
         fi
 
     - name: Throw an error if the tag name doesn't equal the release name
-      if: ${{ steps.check-release.outputs.is-latest-release }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       run: |
         if [[ ${{ github.event.release.tag_name }} != ${{ github.event.release.name }} ]]; then
@@ -58,7 +58,7 @@ runs:
         fi
 
     - name: Throw an error if the release name isn't semver in the format v1.2.3
-      if: ${{ steps.check-release.outputs.is-latest-release }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       # note GitHub generally wants versions prefixed with v; see
       # https://docs.github.com/en/actions/creating-actions/about-custom-actions#using-tags-for-release-management
@@ -71,18 +71,18 @@ runs:
         fi
 
     - name: Checkout
-      if: ${{ steps.check-release.outputs.is-latest-release }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       uses: actions/checkout@v3
 
     - name: Set up git
-      if: ${{ steps.check-release.outputs.is-latest-release }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       run: |
         git config user.email "tagmajorversionbot@example.com"
         git config user.name "Tag Major Version Bot"
 
     - name: Get the major version of the release
-      if: ${{ steps.check-release.outputs.is-latest-release }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       # Release name will be something like v1.2.3, and we want to get v1
       # We just remove everything after the first period
@@ -93,20 +93,20 @@ runs:
         echo "major=$MAJOR" >> $GITHUB_OUTPUT
 
     - name: Delete the old tag locally
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       # If tag doesn't exist locally, we still want to exit without failing
       run: git tag -d ${{ steps.version.outputs.major }} || true
 
     - name: Create a new tag for the major version
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       run:
         git tag -a ${{ steps.version.outputs.major }} -m "Major version ${{
         steps.version.outputs.major }}"
 
     - name: Delete the old tag remotely
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       # https://docs.github.com/en/rest/git/refs?apiVersion=2022-11-28#delete-a-reference
       # If tag doesn't exist remotely, we still want to exit without failing
@@ -120,6 +120,6 @@ runs:
         repos/${{ github.repository }}/git/refs/tags/${{ steps.version.outputs.major }} || true
 
     - name: Push a new tag remotely
-      if: ${{ steps.check.outputs.run-action }}
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       run: git push -u origin ${{ steps.version.outputs.major }}

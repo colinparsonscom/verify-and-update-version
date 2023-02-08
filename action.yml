@@ -36,17 +36,13 @@ runs:
     - name: Check whether we want to run this action
       shell: bash
       # since we can't just manually exit the action if a check fails, we have
-      # to create this big step instead of run 3 separate check steps
+      # to create this big step instead of run 2 separate check steps
       # https://github.com/actions/runner/issues/662
 
-      # we won't run this action if it's a prerelease, a draft, or not the
-      # latest release
+      # we won't run this action if it's a draft or not the latest release
       id: check
       run: |
-        if [[ ${{ github.event.release.prerelease }} == true ]]; then
-          echo "This is a prerelease, so we won't update the major version tag"
-          echo "run-action=false" >> $GITHUB_OUTPUT
-        elif [[ ${{ github.event.release.draft }} == true ]]; then
+        if [[ ${{ github.event.release.draft }} == true ]]; then
           echo "This is a draft, so we won't update the major version tag"
           echo "run-action=false" >> $GITHUB_OUTPUT
         elif [[ ${{ github.event.release.tag_name }} != ${{ steps.latest.outputs.release }} ]]; then

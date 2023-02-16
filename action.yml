@@ -1,7 +1,7 @@
 name: Verify and update version
 author: Colin Parsons
 description:
-  Verify the version tag and release have the same name, and update the major
+  Verify the version tag and release name are valid, and update the major
   version tag, when there's a new latest release.
 branding:
   icon: tag
@@ -70,6 +70,79 @@ runs:
           exit 1
         fi
 
+    - name: Get the prefixed major and previous version of the release
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
+      shell: bash
+      # Release name will be something like v1.2.3, and we want to get v1 and
+      # v1.2.2
+      # https://stackoverflow.com/questions/4168371/how-can-i-remove-all-text-after-a-character-in-bash
+      id: version
+      run: |
+        PREFIXED_MAJOR=$(echo ${{ github.event.release.name }} | cut -f1 -d".")
+        echo "prefixed-major=$PREFIXED_MAJOR" >> $GITHUB_OUTPUT
+
+        MAJOR=$(echo $PREFIXED_MAJOR | cut -c2-) # remove the v
+        MINOR=$(echo ${{ github.event.release.name }} | cut -f2 -d".")
+        PATCH=$(echo ${{ github.event.release.name }} | cut -f3 -d".")
+
+        if [[ ${{ github.event.release.name }} == 'v0.1.0' ]]; then
+          echo "previous-version-regex=^v0.1.0$" >> $GITHUB_OUTPUT
+        elif [[ $PATCH != 0 ]]; then
+          echo "previous-version-regex=^v$MAJOR\.$MINOR\.$((PATCH - 1))$" >> $GITHUB_OUTPUT
+        elif [[ $MINOR != 0 ]]; then
+          echo "previous-version-regex=^v$MAJOR\.$((MINOR - 1))\.\d+$" >> $GITHUB_OUTPUT
+        elif [[ $MAJOR != 0 ]]; then
+          echo "previous-version-regex=^v$((MAJOR - 1))\.\d+\.\d+$" >> $GITHUB_OUTPUT
+        else
+          echo "Fatal error: release is v0.0.0, which should never happen"
+          exit 1
+        fi
+
+    - name:
+        Throw an error if this version is an unallowed change from the previous
+        version
+      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
+      shell: bash
+      # we want to get a list of all releases, to see if the previous version
+      # exists
+      # https://docs.github.com/en/rest/reference/repos#list-releases
+      id: releases
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        regex=${{ steps.version.outputs.previous-version-regex }}
+        page=1
+
+        while true; do
+          res=$( \
+            gh api \
+            -X GET \
+            -H "Accept: application/vnd.github+json" \
+            repos/${{ github.repository }}/releases \
+            -G -d "per_page=100" \
+            -d "page=$page" \
+          )
+
+          list=$(echo $res | jq -r '.[].tag_name')
+
+          for version in $list; do
+            if [[ $version =~ $regex ]]; then
+              exit 0
+            fi
+          done
+
+          if [[ $(echo $res | jq -r '.[].tag_name') == 'null' ]]; then
+            # replace \d+ with * in the regex, so it's easier to read
+            # also remove leading ^ and trailing $, since they're not needed
+            pattern = echo $regex | sed 's/\\d\+/\*/g' | sed 's/^.\(.*\).$/\1/'
+
+            echo "Version ${{ github.event.release.name }} is unallowed. For this version to be valid, the previous version had to match the pattern $pattern, but no such version matching that pattern exists"
+            exit 1
+          fi
+
+          page=$((page + 1))
+        done
+
     - name: Checkout
       if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       uses: actions/checkout@v3
@@ -81,29 +154,18 @@ runs:
         git config user.email "tagmajorversionbot@example.com"
         git config user.name "Tag Major Version Bot"
 
-    - name: Get the major version of the release
-      if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
-      shell: bash
-      # Release name will be something like v1.2.3, and we want to get v1
-      # We just remove everything after the first period
-      # https://stackoverflow.com/questions/4168371/how-can-i-remove-all-text-after-a-character-in-bash
-      id: version
-      run: |
-        MAJOR=$(echo ${{ github.event.release.name }} | cut -f1 -d".")
-        echo "major=$MAJOR" >> $GITHUB_OUTPUT
-
     - name: Delete the old tag locally
       if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       # If tag doesn't exist locally, we still want to exit without failing
-      run: git tag -d ${{ steps.version.outputs.major }} || true
+      run: git tag -d ${{ steps.version.outputs.prefixed-major }} || true
 
     - name: Create a new tag for the major version
       if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
       run:
-        git tag -a ${{ steps.version.outputs.major }} -m "Major version ${{
-        steps.version.outputs.major }}"
+        git tag -a ${{ steps.version.outputs.prefixed-major }} -m "Major version
+        ${{ steps.version.outputs.prefixed-major }}"
 
     - name: Delete the old tag remotely
       if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
@@ -117,9 +179,9 @@ runs:
         gh api \
         -X DELETE \
         -H "Accept: application/vnd.github+json" \
-        repos/${{ github.repository }}/git/refs/tags/${{ steps.version.outputs.major }} || true
+        repos/${{ github.repository }}/git/refs/tags/${{ steps.version.outputs.prefixed-major }} || true
 
     - name: Push a new tag remotely
       if: ${{ steps.check-release.outputs.is-latest-release == 'true' }}
       shell: bash
-      run: git push -u origin ${{ steps.version.outputs.major }}
+      run: git push -u origin ${{ steps.version.outputs.prefixed-major }}

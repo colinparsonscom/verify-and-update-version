@@ -113,14 +113,16 @@ runs:
         regex=${{ steps.version.outputs.previous-version-regex }}
         page=1
 
+        # max per_page is 100, so we need to loop through pages
+        # https://docs.github.com/en/rest/releases/releases?apiVersion=2022-11-28#list-releases
         while true; do
           res=$( \
             gh api \
             -X GET \
             -H "Accept: application/vnd.github+json" \
             repos/${{ github.repository }}/releases \
-            -G -d "per_page=100" \
-            -d "page=$page" \
+            -f "per_page=2" \
+            -f "page=$page" \
           )
 
           list=$(echo $res | jq -r '.[].tag_name')

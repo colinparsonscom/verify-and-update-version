@@ -138,7 +138,7 @@ runs:
             # also remove leading ^ and trailing $, since they're not needed
             pattern=$(echo $regex | sed 's/\\d\+/\*/g' | sed 's/^.\(.*\).$/\1/')
 
-            echo "Version ${{ github.event.release.name }} is unallowed. For this version to be valid, the previous version had to match the pattern $pattern, but no such version matching that pattern exists"
+            echo "Version ${{ github.event.release.name }} is unallowed. For this version to be valid, the previous version had to match the pattern $pattern, but no such version matching that pattern exists."
             exit 1
           fi
 

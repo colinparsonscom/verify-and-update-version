@@ -105,7 +105,14 @@ runs:
       shell: bash
       # we want to get a list of all releases, to see if the previous version
       # exists
+
       # https://docs.github.com/en/rest/reference/repos#list-releases
+      #
+      # we use awk to do string replace because even Windows GitHub runners
+      # include Git bash, which has awk.
+      #
+      # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsshell
+      # https://99-developer-tools.com/bash-awk-on-windows-git-bash-and-conemu/
       id: releases
       env:
         GITHUB_TOKEN: ${{ github.token }}
